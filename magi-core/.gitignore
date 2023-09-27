@@ -1,0 +1,12 @@
+node_modules
+build
+circom
+cache
+out
+*.mp4
+NIACIN RUN THROUGH.md
+vendor/powersOfTau28_hez_final_15.ptau
+vendor/powersOfTau28_hez_final_18.ptau
+
+build-groth
+build-plonk

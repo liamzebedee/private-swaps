@@ -1,0 +1,6 @@
+
+// There is an accounts tree.
+// It contains a bunch of leaves.
+// https://github.com/privacy-scaling-explorations/incrementalquintree/blob/master/circom/incrementalMerkleTree.circom
+// https://github.com/Railgun-Privacy/circuits-v2/blob/main/src/prepare.js
+// https://github.com/iden3/circomlib/blob/master/README.md

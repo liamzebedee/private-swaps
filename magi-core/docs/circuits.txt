@@ -1,0 +1,60 @@
+There are two main circuits:
+
+- deposit
+- swap
+
+
+
+how it works:
+
+deposit
+
+swap
+
+    ins:
+        input_leaf_set
+            unique for all asset_ids
+            eg. only one leaf for each asset ID (ETH, DAI, etc)
+
+            leaves_t0
+                nullifier
+                secret
+                path_elements
+                path_indices
+        
+        swap logic
+            ins:
+                swap_in_asset_id
+                swap_in_asset_amount
+                swap_out_asset_id
+                swap_out_asset_amount
+                swap_out_slippage
+                swap_out_deadline
+            
+            function:
+                for each input leaf
+                if leaf != 0:
+                    destroy(leaf)
+                    output nullifier_leaf_i
+                
+                create new leaves:
+                    input_leaf[0] is the swap_input
+                    input_leaf[1] is the swap_output
+
+                    create swap_output_leaf with balance = input_leaf[1] + swap_out_asset_amount
+                    create swap_input_leaf with balance = input_leaf[0] - swap_in_asset_amount
+                
+                return leaves
+            
+            output:
+                leaves_t0:
+                    nullifier_hash_leaf_i
+                leaves_t1:
+                    commitment_leaf_i
+
+
+
+
+
+
+        output_leaf_set

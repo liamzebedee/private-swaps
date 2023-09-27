@@ -1,0 +1,77 @@
+Tempest is similar to the Tornado privacy pool protocol.
+
+You have assets (DAI, USDC, ETH). Users deposit amounts of these assets into the protocol.
+
+Conceptually, asset ownership is hidden. The way this is done is that each asset is deposited into one large anonmity set,
+and moving your assets is done by proving your ownership of them in zero-knowledge, which effectuates actions on-chain,
+without linking it back to the original deposit.
+
+In order to prove this ownership in ZK, we use a cryptographic construct called an accumulator. An accumulator allows you
+to insert items into a set, and then prove an item is a member of that set. 
+
+The accumulator we use here is a Merkle Tree. A Merkle tree allows us to insert items, and then produce Merkle proofs of these items. 
+It is based on a hash function. Usually you see the SHA256 hash function, but this is not efficient to prove inside a ZK proving scheme.
+So we use the MiMC hash function.
+
+There are other accumulators you could use (RSA accumulators, Semacaulk using KZG Commitments) but these are not production-ready and battle-tested.
+
+While Tornado refers to its items as deposits, it might be easier to conceive of them as UXTO's (Bitcoin unspent transaction outputs). Due to the 
+nature of how ZK proofs and public blockchains are combined, each item inside the accumulator is only usable once, like a UXTO. 
+
+Like a Bitcoin UXTO, a Tempest UXTO can only be "spent" by satisfying a spend condition. 
+
+  In Bitcoin, this is implemented via the `SIGHASH` mechanism - each UXTO is sent to an address, which is a hash of a public key. 
+  To spend a UXTO, you create a transaction signed by the corresponding private key. Inside the Bitcoin VM, the `SIGHASH` code 
+  recovers the public key from this signature, and verifies that the hash(public_key) matches the address on the UXTO.
+
+  This SIGHASH operation is actually a more general form of something we call a commitment scheme in cryptography.
+  A commitment scheme consists of two phases:
+  1) Commit. A user commits to a value.
+  2) Reveal. The user reveals the value, verifying the authenticity of the commitment.
+  For Bitcoin, we create a commitment to a public key by hashing the address. To spend a UXTO, we must reveal
+  the previous commitment to it - by producing a signature which produces the public key which produces the hash.
+
+  So the spend authorisation check in Bitcoin is implemented via a commit-reveal scheme and public-private key crypto, where
+  only the holder of a private keypair can effectuate the reveal step.
+  
+  How is it done in Tempest / ZK coin systems?
+
+  Well, although Bitcoin is not ZK, the mechanisms are actually very similar. Inside a ZK scheme, we also use commit-reveal,
+  but without public-private cryptography. Each Tempest UXTO is marked with a commitment to a spending key. The spending key 
+  is simply a secret string. When a user creates a deposit, they generate a spending key in private, hash it to produce a commitment,
+  and publish this spending key commitment on-chain. When they wish to spend this deposit, they perform the reveal step in zero-knowledge.
+  They generate a proof that says I know "hash(spending_key) == commmitment".
+
+There is one aspect which differs from bitcoin UXTO's, which is "nullifiers". This is an aspect unique to ZK protocols. A nullifier is an artefact of
+the interop between public and private state.
+
+To spend a deposit, we prove that (1) we know the spending key and (2) membership of a deposit in the deposit set (the accumulator). 
+HOWEVER, this is not enough - it does not prevent someone from spending the same deposit twice. We cannot keep track of deposits publicly because our
+protocol must be private. It is possible to "remove" an item from a Merkle tree accumulator, but it is needlessly expensive in ZK. Instead, we can introduce
+a value we can reveal on-chain but reveals nothing about which deposit it is associated with. This is the nullifier.
+
+The deposit consists of (asset_id, asset_amount, spending_key, nullifier). When creating a deposit on-chain, we pass (1) the asset ID and amount 
+and (2) a commitment to the spending key and nullifier. This commitment is computed as pedersen_hash(spending_key ++ nullifier).
+For brevity's sake, we refer to "pedersen_hash(spending_key ++ nullifier)" as the spending key commitment.
+
+When a deposit is inserted into the accumulator, we insert a hash (commitment) of these items. 
+The hash is computed as: 
+  MiMC(MiMC(asset_id, asset_amount), pedersen_hash(spending_key ++ nullifier))
+
+To spend a deposit, we:
+(1) prove authenticity of the spender - by revealing knowledge of the spending key in ZK.
+(1) prove the deposit commitment is MiMC(MiMC(asset_id, asset_amount), pedersen_hash(spending_key ++ nullifier))
+(1) prove membership of the deposit in the deposits set - this is a Merkle proof of the deposit commitment.
+
+To recap, these are the constructs we've chosen:
+
+    Accumulator - Merkle Tree's with MiMC commitments.
+    ZK proving scheme - Groth16 ZK-SNARK's
+    Nullifiers - to eliminate double-spending.
+    Commit-reveal in zero-knowledge - to prove spending authenticity aka ownership of a UXTO.
+
+In terms of commitments:
+
+  The deposit commitment is used for membership proofs
+  The spending key commitment is used for authorising spends and preventing double-spends (through nullifiers)
+

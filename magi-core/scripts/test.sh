@@ -1,0 +1,1 @@
+npx snarkjs groth16 fullprove ../../test-input.json test_js/test.wasm test.final.zkey proof.json public.json

@@ -1,0 +1,116 @@
+
+// Changes from the Tornado approach to privacy pools:
+// 
+// (1) Dual accumulators.
+// Tornado uses a Merkle tree accumulator with the MiMC hash function.
+// It costs ~900k gas to insert into this accumulator, owing to the use of MiMC,
+// a non-EVM friendly hash function.
+// The tree has a max depth of 22, which is a capacity of 2^22 = 1.5M leaves.
+// 
+// Here are some aspects of this:
+// (1) 900k gas is very expensive.
+// (2) The depth of only 1.5M leaves is constraining.
+// (3) To generate ZK proofs of accumulator membership, it requires downloading all the leaves
+//     of the tree locally, and reconstructing the tree.
+// (4) But it is fully trustless.
+// 
+// Tempest offers a dual accumulator scheme.
+// 1. The Tornado approach: An on-chain Merkle tree accumulator with d=22 and MiMC hash function.
+// 2. An off-chain Merkle tree accumulator with d=48, and the MiMC hash function. 
+//    The Merkle tree is computed off-chain by helper nodes, and a signed root is bridged on-chain.
+// 
+// Approach 2:
+// (1) Trusted security model: we trust an off-chain relayer to construct the tree correctly.
+//     The relayer can fake any hash, and thus withdraw any funds, right? 
+//     Well, we prove that the 
+//  
+// (2) Much lower gas: ~2000 gas.
+//     This is because we don't do any on-chain insertion operations. We just SSTORE the commitment for later.
+//
+
+
+
+Tornado gas stats:
+
+deposit  - 900k
+withdraw - 400k
+
+
+so if we naively assume one leaf reveal is ~400k gas
+
+gas limits for chains:
+ethereum - 15M
+polygon  -  9M
+
+naive estimates of maximum leaf merges:
+400/1000 = ~2 per 1M
+
+
+deposit 1000 dai
+    notes - ((1000 dai))
+swap some to eth
+    notes - ((2000 dai), (1 eth))
+swap eth back to dai
+    notes - ((2000 dai), (2944 dai))
+now use dai to buy more eth
+    800k gas
+    (reveal (notes[0] notes[1]))
+
+
+this might be prohibitive
+
+how can we make this better? 
+- snark aggregation on eth mainnet
+    circom libraries soon can do this.
+- trusted relaying:
+    setup an L2
+    verify proofs on L2
+    solidity TempestL2FactRegistryEthereumMainnet {
+        mapping(bytes => bool) valid;
+
+        function verify(bytes proof[24], bytes publicInputs[9]) {
+            id = hash(proof, publicinputs)
+            valid[proof] = verify_proof(proof, publicinputs)
+        }
+    }
+
+    then storage proof:
+        oracle returns signed hash of consensus block
+        we storage proof the value inside the valid slot for the bytes
+
+        solidity TempestL1 {            
+            withdraw(proofArgs) {}
+        }
+
+
+
+
+gas cost of a swap:
+400k (withdraw) + 150k (uniswap + relayer) + 900k (reinsertion)
+
+
+how can we get this down?
+- insertions - just emit the commitment. reconstruct a trusted mimc tree on the side that we relay. now only 20k insertion.
+
+broader strokes:
+- two trees
+- one is trusted, one is not trusted
+- deposit/swap both allow you to specify the destination tree:
+    move(from, to, leaf):
+        withdraw leaf
+        nullify from[leaf]
+        insert(to, leaf)
+
+
+
+
+
+
+ok so:
+
+if the gas costs are massive due to the size of the accumulator proofs
+we could make a separate thing like a "hot wallet"
+
+so there is a hot wallet balances tree, and a regular balances tree
+
+the hot wallet balances tree is "stealeable" by the relayer
